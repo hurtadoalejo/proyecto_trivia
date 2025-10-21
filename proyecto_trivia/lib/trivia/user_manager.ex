@@ -118,7 +118,7 @@ defmodule UserManager do
 
       usuario ->
         # Si el usuario existe, se muestra su puntaje
-        IO.puts("El puntaje del jugador #{usuario.nombre} es de #{usuario.score}")
+        IO.puts("El puntaje del jugador #{usuario.nombre} es de #{usuario.scores}")
     end
   end
 
@@ -168,9 +168,30 @@ defmodule UserManager do
   # Resultado:
   #   %{nombre: "Carlos", id: 1, score: 100}
   def convertir_linea(linea) do
-    [nombre, id, score] = String.trim(linea) |>String.split(",")
-    %{nombre: nombre, id: String.to_integer(id), score: String.to_integer(score)}
-  end
+  # Quita saltos de línea y separa los datos por coma
+  [nombre, id | materias] =
+    String.trim(linea)
+    |> String.split(",")
+
+  # Convierte materias tipo "matematicas:0" a {"matematicas", 0}
+  mapa_materias =
+    materias
+    |> Enum.map(fn materia ->
+      [nombre_materia, puntaje] = String.split(materia, ":")
+      {nombre_materia, String.to_integer(puntaje)}
+    end)
+    |> Enum.into(%{})  # Convierte la lista de tuplas en un mapa
+
+  %{
+    nombre: nombre,
+    id: String.to_integer(id),
+    scores: mapa_materias
+  }
+  
+end
+
+
+
 end
 
 # ==========================================================
