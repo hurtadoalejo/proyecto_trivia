@@ -1,202 +1,200 @@
-# ==========================================================
-# MÓDULO: UserManager
-# Descripción general:
-#   Este módulo gestiona el registro y consulta de usuarios
-#   de un sistema de trivia. Permite registrar nuevos jugadores,
-#   consultar su puntaje, buscar por ID y listar todos los jugadores.
-#   Los datos se guardan en el archivo "data/user_data.txt"
-# ==========================================================
+defmodule User do
+  @moduledoc """
+    Estructura que representa un usuario.
+
+    Contiene:
+      - Nombre de usuario.
+      - Clave del usuario.
+      - Mapa sobre los puntajes de cada tema.
+  """
+  @enforce_keys [:usuario, :clave]
+  defstruct [:usuario, :clave, puntajes:
+    %{"Matemáticas" => 0,
+    "Historia" => 0,
+    "Biología" => 0,
+    "Química" => 0}]
+end
 
 defmodule UserManager do
-  # Archivo donde se almacenan los datos de los usuarios
-  @documento "data/users.csv"
+  @usuarios "data/users.csv" # Ruta del archivo CSV de usuarios
+  @moduledoc """
+  Módulo encargado de la gestión de usuarios.
 
-  # ==========================================================
-  # FUNCIÓN PRINCIPAL: main/0
-  # Descripción:
-  #   Muestra un menú con opciones para el usuario
-  #   y ejecuta la funcionalidad seleccionada.
-  # ==========================================================
-  def main do
-    # Solicita una opción al usuario
-    numero = numero()
+  Permite:
+    - Registrar nuevos usuarios.
+    - Obtener usuarios existentes.
+    - Consultar puntajes por tema de un usuario.
+    - Consultar puntaje total de un usuario.
+    - Actualizar usuarios.
+  """
 
-    # Evalúa la opción ingresada y ejecuta la acción correspondiente
-    case numero do
-      1 ->
-        # Opción 1: Buscar jugador por ID
-        buscar_por_id(mapeo(@documento), buscar_id())
-
-      2 ->
-        # Opción 2: Consultar puntaje de un jugador por su ID
-        consultar_puntaje(mapeo(@documento), buscar_id())
-
-      3 ->
-        # Opción 3: Registrar un nuevo usuario
-        registrar_usuario()
-
-      4 ->
-        # Opción 4: Mostrar todos los jugadores activos
-        mapeo(@documento)
-
-      _ ->
-        # Si se ingresa un número no válido
-        IO.inspect({:error, " NUMERO NO INDICADO"})
-    end
-  end
-
-  # ==========================================================
-  # FUNCIÓN: numero/0
-  # Descripción:
-  #   Muestra el menú principal de opciones y retorna
-  #   la opción seleccionada convertida a número entero.
-  # ==========================================================
-  def numero() do
-    IO.gets(
-      "1 buscar por id, 2 consultar puntaje y 3 para registar , 4 para todos los jugadoes activos "
-    )
-    |> String.trim()
-    |> String.to_integer()
-  end
-
-  # ==========================================================
-  # SECCIÓN: REGISTRO DE USUARIOS
-  # ==========================================================
-
-  # FUNCIÓN: datos_usuario/0
-  # Descripción:
-  #   Solicita al usuario ingresar su nombre y contraseña.
-  #   Devuelve un mapa con esos datos y el puntaje inicial en "0".
-  def datos_usuario do
-    IO.puts("--------- REGISTRO DE USUARIO -----------")
-
-    # Se pide el nombre del usuario
-    nombre = IO.gets("Nombre del usuario a registra: ") |> String.trim()
-
-    # Se pide la contraseña
-    contrasena = IO.gets("Contraseña del usuario: ") |> String.trim()
-
-    # Se retorna un mapa con los datos
-    %{nombre: nombre, contrasena: contrasena, score: "0"}
-  end
-
-  # FUNCIÓN: registrar_usuario/0
-  # Descripción:
-  #   Toma los datos del nuevo usuario y los guarda en el archivo de texto.
-  #   Cada registro se almacena en una línea con formato CSV:
-  #   nombre,contraseña,score
+  @doc """
+    Registra un nuevo usuario pidiendo datos por consola.
+    Verifica que el nombre de usuario no exista previamente.
+  """
   def registrar_usuario() do
-    # Se obtienen los datos del usuario ingresados por consola
-    %{nombre: nombre, contrasena: contrasena, score: score} = datos_usuario()
-
-    # Se construye la línea de texto que se escribirá en el archivo
-    agregar_usuario = "#{nombre},#{contrasena},#{score}\n"
-
-    # Se escribe la información en el archivo (modo append: agregar al final)
-    case File.write(@documento, agregar_usuario, [:append]) do
-      :ok ->
-        "usuario agregado en #{@documento}"
-    end
+    usuario = ingresar_texto("Ingrese el nombre del usuario: ")
+    clave = ingresar_texto("Ingrese la clave del usuario: ")
+    case obtener_usuario(usuario) do
+        nil ->
+          inscribir_usuario_csv(%User{usuario: usuario, clave: clave})
+          IO.puts("Usuario registrado exitosamente.")
+        _ -> IO.puts("ERROR: El nombre de usuario ya existe.")
+      end
   end
 
-  # ==========================================================
-  # SECCIÓN: CONSULTA DE PUNTAJE
-  # ==========================================================
-
-  # FUNCIÓN: consultar_puntaje/2
-  # Descripción:
-  #   Busca un jugador por su ID en la lista de usuarios
-  #   y muestra su puntaje en pantalla.
-  # Parámetros:
-  #   users -> lista de usuarios (mapas)
-  #   id    -> número de identificación a buscar
-  def consultar_puntaje(users, id) do
-    case Enum.find(users, fn x -> x.id == id end) do
-      nil ->
-        # Si no se encuentra el usuario, se retorna un error
-        {:error, " Usuario no encontrado"}
-
-      usuario ->
-        # Si el usuario existe, se muestra su puntaje
-        IO.puts("El puntaje del jugador #{usuario.nombre} es de #{usuario.scores}")
-    end
-  end
-
-  # ==========================================================
-  # SECCIÓN: BÚSQUEDA POR ID
-  # ==========================================================
-
-  # FUNCIÓN: buscar_id/0
-  # Descripción:
-  #   Pide al usuario ingresar un ID por consola y lo convierte a entero.
-  def buscar_id do
-    IO.gets("id a buscar: ")
+  @doc """
+    Función auxiliar para ingresar texto desde la consola.
+    Valida que el texto no esté vacío.
+  """
+  def ingresar_texto(mensaje) do
+    entrada = IO.gets(mensaje)
     |> String.trim()
-    |> String.to_integer()
+    case entrada do
+      "" ->
+        IO.puts("ERROR: El campo no puede estar vacio.")
+        ingresar_texto(mensaje)
+      _ -> entrada
+    end
   end
 
-  # FUNCIÓN: buscar_por_id/2
-  # Descripción:
-  #   Busca un jugador dentro de la lista de usuarios por su ID
-  #   y muestra su información completa.
-  def buscar_por_id(users, id) do
-    users
-    |> Enum.find(fn x -> x.id == id end)
-    |> IO.inspect()
+  @doc """
+    Función auxiliar para ingresar un tema desde la consola.
+    Valida que el tema sea uno de los existentes.
+  """
+  def ingresar_tema(mensaje) do
+    tema = ingresar_texto(mensaje)
+    cond do
+      tema in ["Matemáticas", "Historia", "Química", "Biología"] -> tema
+      true ->
+        IO.puts("ERROR: Tema inválido.")
+        ingresar_tema(mensaje)
+    end
   end
 
-  # ==========================================================
-  # SECCIÓN: MAPEO DE USUARIOS (LECTURA DEL ARCHIVO)
-  # ==========================================================
-
-  # FUNCIÓN: mapeo/1
-  # Descripción:
-  #   Lee el archivo donde están los usuarios registrados
-  #   y convierte cada línea en un mapa con sus respectivos datos.
-  def mapeo(@documento) do
-    File.stream!(@documento)
-    |> Enum.map(&(convertir_linea(&1)))
-    |> IO.inspect(label: "---------JUGADORES ACTIVOS----------")
+  @doc """
+    Convierte una estructura de usuario en una línea de texto
+    para ser almacenada en el archivo CSV.
+  """
+  def convertir_struct_linea(usuario) do
+    nombre_usuario = usuario.usuario
+    clave_usuario = usuario.clave
+    puntajes_usuario = usuario.puntajes
+    |> Enum.map(fn {materia, puntaje} -> "#{materia}:#{puntaje}" end)
+    |> Enum.join(",")
+    "#{nombre_usuario},#{clave_usuario},#{puntajes_usuario}\n"
   end
 
-  # FUNCIÓN: convertir_linea/1
-  # Descripción:
-  #   Convierte una línea del archivo (en formato CSV)
-  #   a un mapa con los campos: nombre, id y score.
-  # Ejemplo de línea:
-  #   "Carlos,1,100"
-  # Resultado:
-  #   %{nombre: "Carlos", id: 1, score: 100}
-  def convertir_linea(linea) do
-  # Quita saltos de línea y separa los datos por coma
-  [nombre, id | materias] =
-    String.trim(linea)
-    |> String.split(",")
+  @doc """
+    Inscribe un nuevo usuario en el archivo CSV.
+  """
+  def inscribir_usuario_csv(usuario) do
+    linea = convertir_struct_linea(usuario)
+    File.write(@usuarios, "#{linea}", [:append])
+  end
 
-  # Convierte materias tipo "matematicas:0" a {"matematicas", 0}
-  mapa_materias =
-    materias
-    |> Enum.map(fn materia ->
-      [nombre_materia, puntaje] = String.split(materia, ":")
-      {nombre_materia, String.to_integer(puntaje)}
+  @doc """
+    Obtiene un usuario por su nombre de usuario.
+  """
+  def obtener_usuario(usuario) do
+    File.stream!(@usuarios)
+    |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+    |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
+  end
+
+  @doc """
+    Obtiene un usuario pedido por consola y se muestra en consola.
+    Si no se encuentra, retorna un mensaje de error.
+  """
+  def obtener_usuario_consola() do
+    usuario = ingresar_texto("Ingrese el nombre del usuario a buscar: ")
+    File.stream!(@usuarios)
+    |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+    |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
+    |> case do
+      nil -> "ERROR: Usuario no encontrado."
+      usuario -> usuario
+    end
+  end
+
+  @doc """
+    Convierte una línea de texto del archivo CSV en una estructura de usuario.
+  """
+  def convertir_linea_struct(linea) do
+    [usuario, clave | puntajes] = String.trim(linea) |> String.split(",")
+    puntajes_convertidos = Enum.reduce(puntajes, %{}, fn puntaje, acc ->
+      [materia, score] = String.split(puntaje, ":")
+      Map.put(acc, materia, String.to_integer(score))
     end)
-    |> Enum.into(%{})  # Convierte la lista de tuplas en un mapa
+    %User{usuario: usuario, clave: clave, puntajes: puntajes_convertidos}
+  end
 
-  %{
-    nombre: nombre,
-    id: String.to_integer(id),
-    scores: mapa_materias
-  }
-  
+  @doc """
+    Consulta el puntaje de un usuario pedido por consola en un tema específico.
+    Muestra el puntaje o un mensaje de error si el usuario no existe.
+  """
+  def consultar_puntaje_consola() do
+    usuario = ingresar_texto("Ingrese el nombre del usuario: ")
+    tema = ingresar_tema("Ingrese el tema a consultar (Matemáticas, Historia, Biología, Química): ")
+    case obtener_usuario(usuario) do
+      nil -> IO.puts("ERROR: Usuario no encontrado.")
+      usuario -> IO.puts("El puntaje de #{usuario.usuario} en #{tema} es #{Map.get(usuario.puntajes, tema)}")
+    end
+  end
+
+  @doc """
+    Consulta el puntaje total de un usuario pedido por consola sumando todos los temas.
+    Muestra el puntaje total o un mensaje de error si el usuario no existe.
+  """
+  def consultar_puntaje_total_consola() do
+    usuario = ingresar_texto("Ingrese el nombre del usuario: ")
+    case obtener_usuario(usuario) do
+      nil -> IO.puts("ERROR: Usuario no encontrado.")
+      usuario ->
+        total = Enum.reduce(usuario.puntajes, 0, fn {_tema, puntaje}, acc -> acc + puntaje end)
+        IO.puts("El puntaje total de #{usuario.usuario} es #{total}")
+    end
+  end
+
+  @doc """
+    Actualiza la clave de un usuario pedido por consola.
+    Muestra un mensaje de éxito o error si el usuario no existe.
+  """
+  def actualizar_clave_consola() do
+    usuario = ingresar_texto("Ingrese el nombre del usuario a actualizar: ")
+    case obtener_usuario(usuario) do
+      nil -> IO.puts("ERROR: Usuario no encontrado.")
+      usuario ->
+        nueva_clave = ingresar_texto("Ingrese la nueva clave: ")
+        usuario_actualizado = %User{usuario | clave: nueva_clave}
+        actualizar_usuario_csv(usuario_actualizado)
+        IO.puts("La clave del usuario ha sido actualizado.")
+    end
+  end
+
+  @doc """
+    Actualiza un usuario en el archivo CSV.
+  """
+  def actualizar_usuario_csv(usuario_actualizado) do
+    usuarios = File.stream!(@usuarios)
+    |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+    |> Enum.map(fn usuario ->
+      cond do
+        usuario.usuario == usuario_actualizado.usuario -> usuario_actualizado
+        true -> usuario
+      end
+    end)
+    sobreescribir_usuarios(usuarios)
+  end
+
+  @doc """
+    Sobreescribe el archivo CSV con la lista de usuarios proporcionada.
+  """
+  def sobreescribir_usuarios(usuarios) do
+    contenido = Enum.map(usuarios, fn usuario ->
+      convertir_struct_linea(usuario)
+    end)
+
+    File.write!(@usuarios, contenido)
+  end
 end
-
-
-
-end
-
-# ==========================================================
-# EJECUCIÓN DEL PROGRAMA
-# Descripción:
-#   Al cargar el archivo, se ejecuta automáticamente la función main().
-# ==========================================================
-UserManager.main()
