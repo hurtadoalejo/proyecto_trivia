@@ -32,7 +32,7 @@ defmodule UserManager do
     Registra un nuevo usuario pidiendo datos por consola.
     Verifica que el nombre de usuario no exista previamente.
   """
-  def registrar_usuario() do
+  def registrar_usuario_consola() do
     usuario = ingresar_texto("Ingrese el nombre del usuario: ")
     clave = ingresar_texto("Ingrese la clave del usuario: ")
     case obtener_usuario(usuario) do
