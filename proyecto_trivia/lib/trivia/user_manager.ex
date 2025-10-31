@@ -39,7 +39,10 @@ defmodule UserManager do
         nil ->
           inscribir_usuario_csv(%User{usuario: usuario, clave: clave})
           IO.puts("Usuario registrado exitosamente.")
-        _ -> IO.puts("ERROR: El nombre de usuario ya existe.")
+        :error ->
+          IO.puts("No se puedo acceder al archivo de usuarios.")
+        _ ->
+          IO.puts("ERROR: El nombre de usuario ya existe.")
       end
   end
 
@@ -97,9 +100,14 @@ defmodule UserManager do
     Obtiene un usuario por su nombre de usuario.
   """
   def obtener_usuario(usuario) do
-    File.stream!(@usuarios)
-    |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
-    |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
+    if File.exists?(@usuarios) do
+      File.stream!(@usuarios)
+      |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+      |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
+    else
+      IO.puts("El archivo de usuarios no existe.")
+      :error
+    end
   end
 
   @doc """
@@ -107,13 +115,17 @@ defmodule UserManager do
     Si no se encuentra, retorna un mensaje de error.
   """
   def obtener_usuario_consola() do
-    usuario = ingresar_texto("Ingrese el nombre del usuario a buscar: ")
-    File.stream!(@usuarios)
-    |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
-    |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
-    |> case do
-      nil -> "ERROR: Usuario no encontrado."
-      usuario -> usuario
+    if File.exists?(@usuarios) do
+      usuario = ingresar_texto("Ingrese el nombre del usuario a buscar: ")
+      File.stream!(@usuarios)
+      |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+      |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
+      |> case do
+        nil -> "ERROR: Usuario no encontrado."
+        usuario -> usuario
+      end
+    else
+      IO.puts("El archivo de usuarios no existe.")
     end
   end
 
@@ -121,9 +133,9 @@ defmodule UserManager do
     Convierte una línea de texto del archivo CSV en una estructura de usuario.
   """
   def convertir_linea_struct(linea) do
-    [usuario, clave | puntajes] = String.trim(linea) |> String.split(",")
+    [usuario, clave | puntajes] = String.trim(linea) |> String.split(";")
     puntajes_convertidos = Enum.reduce(puntajes, %{}, fn puntaje, acc ->
-      [materia, score] = String.split(puntaje, ":")
+      [materia, score] = String.split(puntaje, ";")
       Map.put(acc, materia, String.to_integer(score))
     end)
     %User{usuario: usuario, clave: clave, puntajes: puntajes_convertidos}
@@ -138,7 +150,9 @@ defmodule UserManager do
     tema = ingresar_tema("Ingrese el tema a consultar (Matemáticas, Historia, Biología, Química): ")
     case obtener_usuario(usuario) do
       nil -> IO.puts("ERROR: Usuario no encontrado.")
-      usuario -> IO.puts("El puntaje de #{usuario.usuario} en #{tema} es #{Map.get(usuario.puntajes, tema)}")
+      :error -> IO.puts("No se puedo acceder al archivo de usuarios.")
+      %User{} = usuario ->
+        IO.puts("El puntaje de #{usuario.usuario} en #{tema} es #{Map.get(usuario.puntajes, tema)}")
     end
   end
 
@@ -150,6 +164,7 @@ defmodule UserManager do
     usuario = ingresar_texto("Ingrese el nombre del usuario: ")
     case obtener_usuario(usuario) do
       nil -> IO.puts("ERROR: Usuario no encontrado.")
+      :error -> IO.puts("No se puedo acceder al archivo de usuarios.")
       usuario ->
         total = Enum.reduce(usuario.puntajes, 0, fn {_tema, puntaje}, acc -> acc + puntaje end)
         IO.puts("El puntaje total de #{usuario.usuario} es #{total}")
@@ -164,11 +179,11 @@ defmodule UserManager do
     usuario = ingresar_texto("Ingrese el nombre del usuario a actualizar: ")
     case obtener_usuario(usuario) do
       nil -> IO.puts("ERROR: Usuario no encontrado.")
-      usuario ->
+      :error -> IO.puts("No se pudo acceder al archivo de usuarios.")
+      %User{} = usuario ->
         nueva_clave = ingresar_texto("Ingrese la nueva clave: ")
         usuario_actualizado = %User{usuario | clave: nueva_clave}
         actualizar_usuario_csv(usuario_actualizado)
-        IO.puts("La clave del usuario ha sido actualizado.")
     end
   end
 
@@ -176,15 +191,20 @@ defmodule UserManager do
     Actualiza un usuario en el archivo CSV.
   """
   def actualizar_usuario_csv(usuario_actualizado) do
-    usuarios = File.stream!(@usuarios)
-    |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
-    |> Enum.map(fn usuario ->
-      cond do
-        usuario.usuario == usuario_actualizado.usuario -> usuario_actualizado
-        true -> usuario
-      end
-    end)
-    sobreescribir_usuarios(usuarios)
+    if File.exists?(@usuarios) do
+      usuarios = File.stream!(@usuarios)
+      |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+      |> Enum.map(fn usuario ->
+        cond do
+          usuario.usuario == usuario_actualizado.usuario -> usuario_actualizado
+          true -> usuario
+        end
+      end)
+      sobreescribir_usuarios(usuarios)
+      IO.puts("La clave del usuario ha sido actualizado.")
+    else
+      IO.puts("El archivo de usuarios no existe.")
+    end
   end
 
   @doc """
