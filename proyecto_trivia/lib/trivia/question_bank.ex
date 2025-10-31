@@ -2,16 +2,19 @@ defmodule GestorPreguntas do
   @archivo_preguntas "data/questions.csv"
 
   def cargar_preguntas do
-    @archivo_preguntas
-    |> File.read!()
-    |> String.split("\n", trim: true)
-    |> Enum.drop(1)
-    |> Enum.map(&analizar_linea_pregunta/1)
+    if File.exists?(@archivo_preguntas) do
+      File.stream!(@archivo_preguntas)
+      |> Stream.drop(1)
+      |> Stream.map(&analizar_linea_pregunta/1)
+      |> Enum.to_list()
+    else
+      IO.puts("El archivo de preguntas no existe.")
+    end
   end
 
   defp analizar_linea_pregunta(linea) do
     [tema, pregunta, r1, r2, r3, r4, respuesta_correcta] =
-      String.split(linea, ",", trim: true)
+      String.trim(linea) |> String.split(";")
 
     respuestas = [
       "a) #{r1}",
@@ -40,8 +43,15 @@ defmodule GestorPreguntas do
     lista_preguntas
     |> Enum.shuffle() # Mezcla el orden de los elementos de la lista aleatoriamente
     |> List.first() # Toma el primer elemento de la lista mezclada
-end
+    end
+  end
 
+  # Función para obtener diez preguntas aleatorias de un tema específico.
+  def obtener_preguntas_aleatorias(tema) do
+    cargar_preguntas()
+    |> Enum.filter(fn pregunta -> pregunta.tema == tema end)
+    |> Enum.shuffle()
+    |> Enum.take(10)
   end
 
   # Función para obtener todos los temas disponibles
