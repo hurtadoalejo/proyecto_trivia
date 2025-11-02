@@ -1,6 +1,10 @@
 defmodule GestorPreguntas do
   @archivo_preguntas "data/questions.csv"
 
+  @doc """
+  Función para cargar las preguntas desde el archivo CSV.
+  Devuelve una lista de mapas con los datos de cada pregunta.
+  """
   def cargar_preguntas do
     if File.exists?(@archivo_preguntas) do
       File.stream!(@archivo_preguntas)
@@ -12,7 +16,11 @@ defmodule GestorPreguntas do
     end
   end
 
-  defp analizar_linea_pregunta(linea) do
+  @doc """
+  Función para analizar una línea del archivo CSV y devolver un mapa con los datos de la pregunta.
+  7 campos esperados: tema, pregunta, r1, r2, r3, r4, respuesta_correcta
+  """
+  def analizar_linea_pregunta(linea) do
     [tema, pregunta, r1, r2, r3, r4, respuesta_correcta] =
       String.trim(linea) |> String.split(";")
 
@@ -31,33 +39,18 @@ defmodule GestorPreguntas do
     }
   end
 
-  # Función para obtener UNA pregunta aleatoria por tema
-  def obtener_pregunta_aleatoria_por_tema(tema_seleccionado) do
-    todas_las_preguntas = cargar_preguntas()
-    preguntas_del_tema = Enum.filter(todas_las_preguntas, fn pregunta ->
-      pregunta.tema == tema_seleccionado end)
-
-    case preguntas_del_tema do
-  [] -> nil
-  lista_preguntas ->
-    lista_preguntas
-    |> Enum.shuffle() # Mezcla el orden de los elementos de la lista aleatoriamente
-    |> List.first() # Toma el primer elemento de la lista mezclada
+  @doc """
+  Función para obtener múltiples preguntas aleatorias por tema
+  Limita la cantidad máxima de preguntas a 10.
+  """
+  def obtener_preguntas_aleatorias(tema, cantidad_preguntas) do
+    if cantidad_preguntas <= 10 do
+      cargar_preguntas()
+      |> Enum.filter(fn pregunta -> pregunta.tema == tema end)
+      |> Enum.shuffle()
+      |> Enum.take(cantidad_preguntas)
+    else
+      IO.puts("El número de preguntas solicitadas excede el límite de 10.")
     end
-  end
-
-  # Función para obtener diez preguntas aleatorias de un tema específico.
-  def obtener_preguntas_aleatorias(tema) do
-    cargar_preguntas()
-    |> Enum.filter(fn pregunta -> pregunta.tema == tema end)
-    |> Enum.shuffle()
-    |> Enum.take(10)
-  end
-
-  # Función para obtener todos los temas disponibles
-  def obtener_temas_disponibles do
-    cargar_preguntas()
-    |> Enum.map(fn pregunta -> pregunta.tema end)
-    |> Enum.uniq()
   end
 end
