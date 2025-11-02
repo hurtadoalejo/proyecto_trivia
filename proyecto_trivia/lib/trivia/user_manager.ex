@@ -102,6 +102,7 @@ defmodule UserManager do
   def obtener_usuario(usuario) do
     if File.exists?(@usuarios) do
       File.stream!(@usuarios)
+      |> Stream.drop(0)
       |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
       |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
     else
@@ -118,6 +119,7 @@ defmodule UserManager do
     if File.exists?(@usuarios) do
       usuario = ingresar_texto("Ingrese el nombre del usuario a buscar: ")
       File.stream!(@usuarios)
+      |> Stream.drop(0)
       |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
       |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
       |> case do
@@ -193,6 +195,7 @@ defmodule UserManager do
   def actualizar_usuario_csv(usuario_actualizado) do
     if File.exists?(@usuarios) do
       usuarios = File.stream!(@usuarios)
+      |> Stream.drop(0)
       |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
       |> Enum.map(fn usuario ->
         cond do
