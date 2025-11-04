@@ -47,6 +47,22 @@ defmodule UserManager do
   end
 
   @doc """
+    Registra un nuevo usuario con los datos proporcionados.
+    Verifica que el nombre de usuario no exista previamente.
+  """
+  def registrar_usuario(usuario, clave) do
+    case obtener_usuario(usuario) do
+        nil ->
+          inscribir_usuario_csv(%User{usuario: usuario, clave: clave})
+          IO.puts("Usuario registrado exitosamente.")
+        :error ->
+          IO.puts("No se puedo acceder al archivo de usuarios.")
+        _ ->
+          IO.puts("ERROR: El nombre de usuario ya existe.")
+      end
+  end
+
+  @doc """
     Función auxiliar para ingresar texto desde la consola.
     Valida que el texto no esté vacío.
   """
@@ -84,8 +100,8 @@ defmodule UserManager do
     clave_usuario = usuario.clave
     puntajes_usuario = usuario.puntajes
     |> Enum.map(fn {materia, puntaje} -> "#{materia}:#{puntaje}" end)
-    |> Enum.join(",")
-    "#{nombre_usuario},#{clave_usuario},#{puntajes_usuario}\n"
+    |> Enum.join(";")
+    "#{nombre_usuario};#{clave_usuario};#{puntajes_usuario}\n"
   end
 
   @doc """
@@ -102,7 +118,7 @@ defmodule UserManager do
   def obtener_usuario(usuario) do
     if File.exists?(@usuarios) do
       File.stream!(@usuarios)
-      |> Stream.drop(0)
+      |> Stream.drop(1)
       |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
       |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
     else
@@ -119,7 +135,7 @@ defmodule UserManager do
     if File.exists?(@usuarios) do
       usuario = ingresar_texto("Ingrese el nombre del usuario a buscar: ")
       File.stream!(@usuarios)
-      |> Stream.drop(0)
+      |> Stream.drop(1)
       |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
       |> Enum.find(fn %User{usuario: usuario_temporal} -> usuario_temporal == usuario  end)
       |> case do
@@ -137,7 +153,7 @@ defmodule UserManager do
   def convertir_linea_struct(linea) do
     [usuario, clave | puntajes] = String.trim(linea) |> String.split(";")
     puntajes_convertidos = Enum.reduce(puntajes, %{}, fn puntaje, acc ->
-      [materia, score] = String.split(puntaje, ";")
+      [materia, score] = String.split(puntaje, ":")
       Map.put(acc, materia, String.to_integer(score))
     end)
     %User{usuario: usuario, clave: clave, puntajes: puntajes_convertidos}
@@ -159,6 +175,37 @@ defmodule UserManager do
   end
 
   @doc """
+    Consulta los puntajes de todos los usuarios en un tema específico.
+    Devuelve una lista de usuarios con sus puntajes en el tema.
+  """
+  def consultar_puntajes_temas(tema) do
+    if File.exists?(@usuarios) do
+      File.stream!(@usuarios)
+      |> Stream.drop(1)
+      |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+      |> Enum.map(fn %User{usuario: usuario, puntajes: puntajes} ->
+        {usuario, Map.get(puntajes, tema)}
+      end)
+    else
+      IO.puts("El archivo de usuarios no existe.")
+    end
+  end
+
+  @doc """
+    Consulta el puntaje de un usuario en un tema específico.
+    Devuelve el puntaje o un mensaje de error si el usuario no existe.
+  """
+  def consultar_puntaje_tema(usuario, tema) do
+    case obtener_usuario(usuario) do
+      nil -> {:error, "Usuario no encontrado."}
+      :error -> {:error, "No se puedo acceder al archivo de usuarios."}
+      %User{} = usuario ->
+        Map.get(usuario.puntajes, tema)
+        {:ok, usuario.usuario, Map.get(usuario.puntajes, tema)}
+    end
+  end
+
+  @doc """
     Consulta el puntaje total de un usuario pedido por consola sumando todos los temas.
     Muestra el puntaje total o un mensaje de error si el usuario no existe.
   """
@@ -174,18 +221,19 @@ defmodule UserManager do
   end
 
   @doc """
-    Actualiza la clave de un usuario pedido por consola.
-    Muestra un mensaje de éxito o error si el usuario no existe.
+    Actualiza el puntaje de un usuario en un tema específico.
+    Suma la cantidad proporcionada al puntaje actual.
   """
-  def actualizar_clave_consola() do
-    usuario = ingresar_texto("Ingrese el nombre del usuario a actualizar: ")
+  def actualizar_puntaje_usuario(usuario, tema, adicion) do
     case obtener_usuario(usuario) do
-      nil -> IO.puts("ERROR: Usuario no encontrado.")
-      :error -> IO.puts("No se pudo acceder al archivo de usuarios.")
+      nil -> {:error, "Usuario no encontrado."}
+      :error -> {:error, "No se puedo acceder al archivo de usuarios."}
       %User{} = usuario ->
-        nueva_clave = ingresar_texto("Ingrese la nueva clave: ")
-        usuario_actualizado = %User{usuario | clave: nueva_clave}
+        puntaje_actual = Map.get(usuario.puntajes, tema)
+        nuevo_puntaje = puntaje_actual + adicion
+        usuario_actualizado = %User{usuario | puntajes: Map.put(usuario.puntajes, tema, nuevo_puntaje)}
         actualizar_usuario_csv(usuario_actualizado)
+        {:ok, usuario_actualizado}
     end
   end
 
@@ -195,7 +243,7 @@ defmodule UserManager do
   def actualizar_usuario_csv(usuario_actualizado) do
     if File.exists?(@usuarios) do
       usuarios = File.stream!(@usuarios)
-      |> Stream.drop(0)
+      |> Stream.drop(1)
       |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
       |> Enum.map(fn usuario ->
         cond do
@@ -204,7 +252,7 @@ defmodule UserManager do
         end
       end)
       sobreescribir_usuarios(usuarios)
-      IO.puts("La clave del usuario ha sido actualizado.")
+      IO.puts("La clave del usuario ha sido actualizada.")
     else
       IO.puts("El archivo de usuarios no existe.")
     end
@@ -214,10 +262,11 @@ defmodule UserManager do
     Sobreescribe el archivo CSV con la lista de usuarios proporcionada.
   """
   def sobreescribir_usuarios(usuarios) do
-    contenido = Enum.map(usuarios, fn usuario ->
+    contenido_usuarios = Enum.map(usuarios, fn usuario ->
       convertir_struct_linea(usuario)
     end)
-
+    encabezado = ["usuario;clave;Biología;Historia;Matemáticas;Química\n"] ++ contenido_usuarios
+    contenido = Enum.join(encabezado, "")
     File.write!(@usuarios, contenido)
   end
 end
