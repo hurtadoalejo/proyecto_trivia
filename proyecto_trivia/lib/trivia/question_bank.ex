@@ -50,7 +50,7 @@ defmodule GestorPreguntas do
       |> Enum.shuffle()
       |> Enum.take(cantidad_preguntas)
     else
-      IO.puts("El número de preguntas solicitadas excede el límite de 10.")
+      {:error, "La cantidad máxima de preguntas es 10."}
     end
   end
 end
