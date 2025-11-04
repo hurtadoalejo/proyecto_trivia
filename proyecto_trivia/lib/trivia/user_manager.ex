@@ -178,7 +178,7 @@ defmodule UserManager do
     Consulta los puntajes de todos los usuarios en un tema específico.
     Devuelve una lista de usuarios con sus puntajes en el tema.
   """
-  def consultar_puntajes_temas(tema) do
+  def consultar_puntajes_tema(tema) do
     if File.exists?(@usuarios) do
       File.stream!(@usuarios)
       |> Stream.drop(1)
@@ -186,6 +186,7 @@ defmodule UserManager do
       |> Enum.map(fn %User{usuario: usuario, puntajes: puntajes} ->
         {usuario, Map.get(puntajes, tema)}
       end)
+      |> Enum.sort_by(fn {_usuario, puntaje} -> puntaje end, :desc)
     else
       IO.puts("El archivo de usuarios no existe.")
     end
