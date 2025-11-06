@@ -9,10 +9,11 @@ defmodule User do
   """
   @enforce_keys [:usuario, :clave]
   defstruct [:usuario, :clave, puntajes:
-    %{"Matemáticas" => 0,
-    "Historia" => 0,
-    "Biología" => 0,
-    "Química" => 0}]
+    %{"matematicas" => 0,
+    "historia" => 0,
+    "biologia" => 0,
+    "quimica" => 0,
+    "fisica" => 0}]
 end
 
 defmodule UserManager do
@@ -55,10 +56,13 @@ defmodule UserManager do
         nil ->
           inscribir_usuario_csv(%User{usuario: usuario, clave: clave})
           IO.puts("Usuario registrado exitosamente.")
+          :ok
         :error ->
           IO.puts("No se puedo acceder al archivo de usuarios.")
+          :error
         _ ->
           IO.puts("ERROR: El nombre de usuario ya existe.")
+          :error
       end
   end
 
@@ -192,6 +196,20 @@ defmodule UserManager do
     end
   end
 
+  def consultar_puntajes() do
+    if File.exists?(@usuarios) do
+      File.stream!(@usuarios)
+      |> Stream.drop(1)
+      |> Stream.map(fn linea -> convertir_linea_struct(linea) end)
+      |> Enum.map(fn %User{usuario: usuario, puntajes: puntajes} ->
+        {usuario, Enum.sum_by(puntajes, fn {_tema, puntaje} -> puntaje end)}
+      end)
+      |> Enum.sort_by(fn {_usuario, puntaje} -> puntaje end, :desc)
+    else
+      IO.puts("El archivo de usuarios no existe.")
+    end
+  end
+
   @doc """
     Consulta el puntaje de un usuario en un tema específico.
     Devuelve el puntaje o un mensaje de error si el usuario no existe.
@@ -253,7 +271,6 @@ defmodule UserManager do
         end
       end)
       sobreescribir_usuarios(usuarios)
-      IO.puts("La clave del usuario ha sido actualizada.")
     else
       IO.puts("El archivo de usuarios no existe.")
     end
