@@ -181,18 +181,8 @@ defmodule Trivia.Game do
     {:noreply, nuevo_estado}
   end
 
-  # === Helpers ====================================================
-
-  defp letra_correcta_de_estado(estado) do
-    case Enum.at(estado.questions, estado.round_index - 1) do
-      %{respuesta_correcta: r} -> String.downcase(String.trim(r))
-      _ -> "a"
-    end
-  end
-
   defp penalizar_no_respondidos(estado) do
     ronda = estado.round_index
-    letra_correcta = letra_correcta_de_estado(estado)
 
     # Recorremos jugadores y penalizamos a quien no respondió esta ronda
     {jugadores_actualizados, _} =
@@ -211,7 +201,7 @@ defmodule Trivia.Game do
           # Difundir a todos en la sala que este usuario quedó incorrecto por timeout
           GenServer.cast(
             Trivia.Server,
-            {:difundir_a_partida, self(), {:respuesta, usuario, ronda, {:incorrecta, letra_correcta}}}
+            {:difundir_a_partida, self(), {:respuesta, usuario, ronda, :incorrecta}}
           )
 
           {{usuario, pj2}, true}
