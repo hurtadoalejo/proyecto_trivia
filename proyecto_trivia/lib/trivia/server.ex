@@ -86,14 +86,17 @@ defmodule Trivia.Server do
 
   @impl true
   def handle_call({:connect, usuario, clave, pid_cliente}, _from, estado) do
-    case autenticar_o_registrar(usuario, clave) do
-      {:ok, estatus} ->
-        case poner_sesion(estado, usuario, pid_cliente) do
-          {:ok, nuevo_estado} -> {:reply, {:ok, estatus}, nuevo_estado}
-        end
+    if Map.has_key?(estado.sesiones, usuario) do
+      {:reply, {:error, :already_connected}, estado}
+    else
+      case autenticar_o_registrar(usuario, clave) do
+        {:ok, status} ->
+          {:ok, nuevo_estado} = poner_sesion(estado, usuario, pid_cliente)
+          {:reply, {:ok, status}, nuevo_estado}
 
-      {:error, motivo} ->
-        {:reply, {:error, motivo}, estado}
+        {:error, motivo} ->
+          {:reply, {:error, motivo}, estado}
+      end
     end
   end
 
