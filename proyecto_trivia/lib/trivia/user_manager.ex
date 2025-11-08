@@ -239,6 +239,16 @@ defmodule UserManager do
     end
   end
 
+  def consultar_puntaje_total(usuario) do
+    case obtener_usuario(usuario) do
+      nil -> {:error, "Usuario no encontrado."}
+      :error -> {:error, "No se puedo acceder al archivo de usuarios."}
+      usuario ->
+        total = Enum.reduce(usuario.puntajes, 0, fn {_tema, puntaje}, acc -> acc + puntaje end)
+        {:ok, usuario.usuario, total}
+    end
+  end
+
   @doc """
     Actualiza el puntaje de un usuario en un tema específico.
     Suma la cantidad proporcionada al puntaje actual.

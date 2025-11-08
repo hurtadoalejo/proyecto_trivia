@@ -70,13 +70,13 @@ defmodule Trivia.Game do
   # Solo el servidor principal puede definir quién es el creador
   @impl true
   def handle_cast({:establecer_creador, usuario_creador}, estado) do
-    nuevo_estado =
-      if estado.creador == nil do
-        %{estado | creador: usuario_creador}
-      else
-        estado
-      end
+    nuevo_estado = %{estado | creador: usuario_creador}
+    {:noreply, nuevo_estado}
+  end
 
+  @impl true
+  def handle_cast({:forzar_salida, usuario}, estado) do
+    nuevo_estado = %{estado | players: Map.delete(estado.players, usuario)}
     {:noreply, nuevo_estado}
   end
 
@@ -156,7 +156,7 @@ defmodule Trivia.Game do
         }
 
         nuevo_estado = put_in(estado.players[usuario], jugador_actualizado)
-        resultado_reply = if es_correcta, do: :correcta, else: {:incorrecta, letra_correcta}
+        resultado_reply = if es_correcta, do: :correcta, else: :incorrecta
 
         # Difundir a todos que este usuario respondió (pero NO avanzar)
         GenServer.cast(
