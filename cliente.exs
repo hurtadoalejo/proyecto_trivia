@@ -6,14 +6,12 @@ defmodule ClienteGenServer do
     - :usuario - el nombre del usuario conectado (o nil si no hay sesión)
     - :partida - el PID de la última partida conocida (o nil si no hay ninguna)
     - :partidas_listadas - la lista de partidas listadas (o [] si no hay ninguna)
-    - :preguntas_respuestas - un mapa de preguntas y respuestas (inicialmente vacío)
-    - :puntaje - el puntaje actual del usuario (inicialmente 0)
     - :estado - el estado del cliente (:esperando o :en_partida)
   """
   def start_link do
     GenServer.start_link(
       __MODULE__,
-    %{usuario: nil, partida: nil, partidas_listadas: [], preguntas_respuestas: %{}, puntaje: 0, estado: :esperando},
+    %{usuario: nil, partida: nil, partidas_listadas: [], estado: :esperando},
     name: __MODULE__)
   end
 
