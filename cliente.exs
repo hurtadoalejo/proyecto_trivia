@@ -171,8 +171,7 @@ defmodule ClienteGenServer do
   def handle_cast({:trivia_evento, {:nueva_ronda, ronda, datos}}, state) do
     IO.puts("\nRonda #{ronda}: #{datos.pregunta}")
     datos.respuestas
-    |> Enum.with_index(1)
-    |> Enum.each(fn {txt, indice} -> IO.puts("  #{indice}. #{txt}") end)
+    |> Enum.each(fn txt -> IO.puts("  #{txt}.") end)
     IO.puts("Responde con: answer #{ronda} <a|b|c|d>\n")
     IO.write("cliente> ")
     {:noreply, %{state | estado: :en_partida}}
