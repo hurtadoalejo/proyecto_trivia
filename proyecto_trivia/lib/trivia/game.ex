@@ -3,71 +3,60 @@ defmodule Trivia.Game do
   Proceso de partida (cada juego es un GenServer independiente).
 
   Estado:
-   - topic (tema)
-   - total_questions
-   - seconds_per_question
-   - players: %{usuario => %{score: entero, answered_rounds: MapSet}}
-   - round_index (1..N)
-   - questions: lista de preguntas %{pregunta, respuestas, respuesta_correcta}
-   - started? boolean
-   - max_players (por defecto 4)
-   - timer_ref (para el temporizador de cada ronda)
+   - tema (tema)
+   - total_preguntas
+   - tiempo_por_pregunta
+   - jugadores: %{usuario => %{puntaje: entero, respondio?: false}}
+   - ronda_index (1..N)
+   - preguntas: lista de preguntas %{pregunta, respuestas, respuesta_correcta}
+   - comenzo? boolean
+   - max_jugadores (por defecto 4)
+   - temporizador (para el temporizador de cada ronda_index)
    - creador: usuario que creó la partida
   """
-
   use GenServer
 
-  defstruct [
-    :topic,
-    :total_questions,
-    :seconds_per_question,
-    :questions,
-    :round_index,
-    :started?,
-    :max_players,
-    :creador,
-    players: %{},
-    timer_ref: nil
-  ]
+  @default_max_jugadores 4
 
-  @default_max_players 4
-
-  # === Arranque ==================================================
+  @doc """
+  Inicia un nuevo proceso de partida con las opciones dadas.
+  """
   def start_link(opciones) do
     GenServer.start_link(__MODULE__, opciones)
   end
 
   @impl true
   def init(opciones) do
-    tema = Map.fetch!(opciones, :tema)
-    total = Map.get(opciones, :preguntas, 5)
-    segundos = Map.get(opciones, :tiempo, 15)
-    max_jugadores = Map.get(opciones, :max_jugadores, @default_max_players)
+    tema = Map.get(opciones, :tema)
+    total = Map.get(opciones, :preguntas)
+    segundos = Map.get(opciones, :tiempo)
 
     preguntas =
       case GestorPreguntas.obtener_preguntas_aleatorias(tema, total) do
         {:error, _} -> []
-        lista when is_list(lista) -> lista
+        lista -> lista
       end
 
     {:ok,
-     %__MODULE__{
-       topic: tema,
-       total_questions: total,
-       seconds_per_question: segundos,
-       questions: preguntas,
-       round_index: 0,
-       started?: false,
-       max_players: max_jugadores,
+      %{
+       tema: tema,
+       total_preguntas: total,
+       tiempo_por_pregunta: segundos,
+       preguntas: preguntas,
+       ronda_index: 0,
+       comenzo?: false,
+       max_jugadores: @default_max_jugadores,
        creador: nil,
-       players: %{},
-       timer_ref: nil
+       jugadores: %{},
+       temporizador: nil
      }}
   end
 
-  # === Lógica de comandos ========================================
-
-  # Solo el servidor principal puede definir quién es el creador
+  @doc """
+  Métodos asíncronos para interactuar con la partida.
+  handle_cast({:establecer_creador, usuario_creador}, estado) Establece el creador de la partida.
+  handle_cast({:forzar_salida, usuario}, estado) Forzar la salida de un usuario de la partida.
+  """
   @impl true
   def handle_cast({:establecer_creador, usuario_creador}, estado) do
     nuevo_estado = %{estado | creador: usuario_creador}
@@ -77,8 +66,8 @@ defmodule Trivia.Game do
   @impl true
   def handle_cast({:forzar_salida, usuario}, estado) do
     cond do
-      estado.creador == usuario and not estado.started? ->
-        Enum.each(estado.players, fn {miembro, _} ->
+      estado.creador == usuario and not estado.comenzo? ->
+        Enum.each(estado.jugadores, fn {miembro, _} ->
           if miembro != usuario do
             GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:fin_partida_cancelada, miembro}})
           end
@@ -87,13 +76,13 @@ defmodule Trivia.Game do
         Process.exit(self(), :normal)
         {:noreply, estado}
 
-      estado.started? and Enum.count(estado.players) == 1 ->
+      estado.comenzo? and Enum.count(estado.jugadores) == 1 ->
         Trivia.Supervisor.terminar_partida(self())
         Process.exit(self(), :normal)
         {:noreply, estado}
 
-      Map.has_key?(estado.players, usuario) ->
-        nuevo_estado = %{estado | players: Map.delete(estado.players, usuario)}
+      Map.has_key?(estado.jugadores, usuario) ->
+        nuevo_estado = %{estado | jugadores: Map.delete(estado.jugadores, usuario)}
         {:noreply, nuevo_estado}
 
       true ->
@@ -101,88 +90,65 @@ defmodule Trivia.Game do
     end
   end
 
-  # Unirse a una partida
+  @doc """
+  Maneja las llamadas síncronas para unirse, iniciar y responder en la partida.
+  handle_call({:join, usuario}, _from, estado) Permite a un usuario unirse a la partida.
+  handle_call({:start, usuario_llamador}, _from, estado) Inicia la partida si el llamador es el creador.
+  handle_call({:answer, usuario, ronda_index, opcion}, _from, estado) Registra la respuesta de un jugador.
+  handle_call(:get_creador, _from, estado) Devuelve el creador de la partida.
+  """
   @impl true
   def handle_call({:join, usuario}, _from, estado) do
     cond do
-      estado.started? ->
+      estado.comenzo? ->
         {:reply, {:error, :ya_iniciada}, estado}
 
-      map_size(estado.players) >= estado.max_players ->
+      map_size(estado.jugadores) >= estado.max_jugadores ->
         {:reply, {:error, :llena}, estado}
 
-      Map.has_key?(estado.players, usuario) ->
+      Map.has_key?(estado.jugadores, usuario) ->
         {:reply, {:ok, :ya_estaba}, estado}
 
       true ->
-        nuevo_jugador = %{score: 0, answered_rounds: MapSet.new()}
-        nuevo_estado = put_in(estado.players[usuario], nuevo_jugador)
+        nuevo_jugador = %{puntaje: 0, respondio?: false}
+        nuevos_jugadores = Map.put(estado.jugadores, usuario, nuevo_jugador)
+        nuevo_estado = %{estado | jugadores: nuevos_jugadores}
         {:reply, {:ok, :unido}, nuevo_estado}
     end
   end
 
-  # Solo el creador puede iniciar la partida
   @impl true
   def handle_call({:start, usuario_llamador}, _from, estado) do
     cond do
-      estado.creador == nil ->
-        {:reply, {:error, :sin_creador}, estado}
-
       estado.creador != usuario_llamador ->
         {:reply, {:error, :no_autorizado}, estado}
 
-      estado.started? ->
+      estado.comenzo? ->
         {:reply, {:error, :ya_iniciada}, estado}
 
-      estado.questions == [] ->
-        {:reply, {:error, :sin_preguntas}, estado}
-
       true ->
-        estado = %{estado | started?: true, round_index: 0}
-        {:reply, {:ok, :iniciada}, siguiente_ronda(estado)}
+        estado = %{estado | comenzo?: true, ronda_index: 0}
+        {:reply, {:ok, :iniciada}, siguiente_ronda_index(estado)}
     end
   end
 
-  # Registrar respuesta de un jugador
   @impl true
-  def handle_call({:answer, usuario, ronda, opcion}, _from, estado) do
-    cond do
-      not estado.started? ->
-        {:reply, {:error, :no_iniciada}, estado}
+  def handle_call({:answer, usuario, ronda_index, opcion}, _from, estado) do
+    case verificar_condiciones_error(estado, usuario, ronda_index) do
+      :ok ->
+        letra_correcta = obtener_respuesta_correcta(estado, estado.ronda_index)
+        es_correcta? = opcion == letra_correcta
+        puntos = if es_correcta?, do: 10, else: -5
 
-      ronda != estado.round_index ->
-        {:reply, {:error, :ronda_incorrecta}, estado}
+        nuevo_estado = actualizar_jugador(estado, usuario, puntos)
+        resultado = if es_correcta?, do: :correcta, else: :incorrecta
 
-      MapSet.member?(estado.players[usuario].answered_rounds, ronda) ->
-        {:reply, {:error, :ya_respondio}, estado}
+        difundir_resultado(resultado, usuario, ronda_index)
 
-      true ->
-        letra_correcta =
-          case Enum.at(estado.questions, estado.round_index - 1) do
-            %{respuesta_correcta: r} -> String.downcase(String.trim(r))
-            _ -> "a"
-          end
+        {:reply, {:ok, resultado}, nuevo_estado}
 
-        es_correcta = String.downcase(String.trim(opcion)) == letra_correcta
-        delta = if es_correcta, do: 10, else: -5
-
-        jugador = estado.players[usuario]
-        jugador_actualizado = %{
-          jugador
-          | score: jugador.score + delta,
-            answered_rounds: MapSet.put(jugador.answered_rounds, ronda)
-        }
-
-        nuevo_estado = put_in(estado.players[usuario], jugador_actualizado)
-        resultado_reply = if es_correcta, do: :correcta, else: :incorrecta
-
-        # Difundir a todos que este usuario respondió (pero NO avanzar)
-        GenServer.cast(
-          Trivia.Server,
-          {:difundir_a_partida, self(), {:respuesta, usuario, ronda, resultado_reply}}
-        )
-
-        {:reply, {:ok, resultado_reply}, nuevo_estado}
+      {:error, reason} ->
+        {:reply, {:error, reason}, estado}
     end
   end
 
@@ -191,104 +157,135 @@ defmodule Trivia.Game do
     {:reply, {:ok, estado.creador}, estado}
   end
 
-  # === Temporizador ==============================================
+  @doc """
+  Maneja mensajes internos, como el temporizador de ronda_index.
+  handle_info(:round_timeout, estado) Penaliza a los jugadores que no respondieron y avanza a la siguiente ronda_index.
+  """
   @impl true
   def handle_info(:round_timeout, estado) do
     estado_penalizado = penalizar_no_respondidos(estado)
-    nuevo_estado = siguiente_ronda(%{estado_penalizado | timer_ref: nil})
+    nuevo_estado = siguiente_ronda_index(%{estado_penalizado | temporizador: nil})
     {:noreply, nuevo_estado}
   end
 
-  defp penalizar_no_respondidos(estado) do
-    ronda = estado.round_index
+  @doc """
+  Penaliza a los jugadores que no respondieron en la ronda actual.
+  """
+  def penalizar_no_respondidos(estado) do
+    ronda_index = estado.ronda_index
 
-    # Recorremos jugadores y penalizamos a quien no respondió esta ronda
-    {jugadores_actualizados, _} =
-      Enum.map_reduce(estado.players, false, fn {usuario, pj}, _acc ->
-        ya_respondio = MapSet.member?(pj.answered_rounds, ronda)
-
-        if ya_respondio do
-          {{usuario, pj}, false}
+    jugadores_actualizados =
+      Enum.map(estado.jugadores, fn {usuario, datos} ->
+        if datos.respondio? do
+          {usuario, %{datos | respondio?: false}}
         else
-          pj2 = %{
-            pj
-            | score: pj.score - 5,
-              answered_rounds: MapSet.put(pj.answered_rounds, ronda)
-          }
-
-          # Difundir a todos en la sala que este usuario quedó incorrecto por timeout
-          GenServer.cast(
-            Trivia.Server,
-            {:difundir_a_partida, self(), {:respuesta, usuario, ronda, :incorrecta}}
-          )
-
-          {{usuario, pj2}, true}
+          difundir_resultado(:incorrecta, usuario, ronda_index)
+          {usuario, %{datos | puntaje: datos.puntaje - 5}}
         end
       end)
 
-    %{estado | players: Map.new(jugadores_actualizados)}
+    nuevos_jugadores = Map.new(jugadores_actualizados)
+    %{estado | jugadores: nuevos_jugadores}
   end
 
-  defp siguiente_ronda(estado) do
-    if estado.timer_ref, do: Process.cancel_timer(estado.timer_ref)
-    nueva_ronda = estado.round_index + 1
+  @doc """
+  Avanza a la siguiente ronda o finaliza la partida en caso de haber sido la última
+  """
+  def siguiente_ronda_index(estado) do
+    if estado.temporizador, do: Process.cancel_timer(estado.temporizador)
+    nueva_ronda_index = estado.ronda_index + 1
 
-    if nueva_ronda > estado.total_questions do
+    if nueva_ronda_index > estado.total_preguntas do
       finalizar_partida(estado)
     else
-      pregunta = Enum.at(estado.questions, nueva_ronda - 1)
+      pregunta = Enum.at(estado.preguntas, nueva_ronda_index - 1)
 
-      # Emitir evento a los clientes de esta partida
       datos_mostrables = %{
         pregunta: pregunta.pregunta,
         respuestas: pregunta.respuestas
       }
 
-      GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:nueva_ronda, nueva_ronda, datos_mostrables}})
+      GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:nueva_ronda, nueva_ronda_index, datos_mostrables}})
 
-      ref = Process.send_after(self(), :round_timeout, estado.seconds_per_question * 1000)
-      %{estado | round_index: nueva_ronda, timer_ref: ref}
+      referencia = Process.send_after(self(), :round_timeout, estado.tiempo_por_pregunta * 1000)
+      %{estado | ronda_index: nueva_ronda_index, temporizador: referencia}
     end
   end
 
-  defp finalizar_partida(estado) do
+  @doc """
+  Método que finaliza la partida
+  1) Difunde quién fue el ganador y los puntajes finales
+  2) Construye el formato para guardar en results.csv
+  3) Termina el proceso
+  """
+  def finalizar_partida(estado) do
     puntajes_finales =
-      for {usuario, %{score: puntaje}} <- estado.players, into: %{}, do: {usuario, puntaje}
+      Enum.reduce(estado.jugadores, %{}, fn {usuario, datos}, acc ->
+        Map.put(acc, usuario, datos.puntaje)
+      end)
 
-    ganador =
-      puntajes_finales
-      |> Enum.max_by(fn {_u, s} -> s end, fn -> {nil, 0} end)
-      |> elem(0)
+    ganador = Enum.max_by(puntajes_finales, fn {_usuario, puntaje} -> puntaje end)
 
     Enum.each(puntajes_finales, fn {usuario, puntaje} ->
-      UserManager.actualizar_puntaje_usuario(usuario, estado.topic, puntaje)
+      UserManager.actualizar_puntaje_usuario(usuario, estado.tema, puntaje)
     end)
 
-    # Notificar a los clientes sobre el fin de la partida
     GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:fin_partida, ganador, puntajes_finales}})
 
     fecha =
-      NaiveDateTime.utc_now()
-      |> NaiveDateTime.truncate(:second)
-      |> NaiveDateTime.to_string()
+      DateTime.utc_now()
+      |> DateTime.truncate(:second)
+      |> DateTime.to_string()
 
-    Trivia.Server.guardar_resultado(fecha, estado.topic, puntajes_finales)
+    Trivia.Server.guardar_resultado(fecha, estado.tema, puntajes_finales)
 
-    # Cancelar el temporizador si está activo
-    if estado.timer_ref, do: Process.cancel_timer(estado.timer_ref)
+    if estado.temporizador, do: Process.cancel_timer(estado.temporizador)
 
-    # Intentar eliminar la partida del supervisor
-    case DynamicSupervisor.terminate_child(Trivia.Supervisor, self()) do
-      :ok ->
-        IO.puts("El proceso de la partida ha sido eliminado correctamente del supervisor.")
-      {:error, :not_found} ->
-        IO.puts("El proceso de la partida ya no está supervisado o no se encontró.")
-    end
-
-    # Asegurarse de que el proceso termine
     Trivia.Supervisor.terminar_partida(self())
-    Process.exit(self(), :normal) # Esto termina el proceso de la partida de manera controlada.
+    Process.exit(self(), :normal)
 
     estado
+  end
+
+  @doc """
+  Verificar las condiciones del error antes de procesar la respuesta de un jugador
+  """
+  def verificar_condiciones_error(estado, usuario, ronda_index) do
+    cond do
+      not estado.comenzo? -> {:error, :no_iniciada}
+      ronda_index != estado.ronda_index -> {:error, :ronda_incorrecta}
+      estado.jugadores[usuario].respondio? == true -> {:error, :ya_respondio}
+      true -> :ok
+    end
+  end
+
+  @doc """
+  Obtiene la respuesta correcta de una ronda específica
+  """
+  def obtener_respuesta_correcta(estado, ronda_index) do
+    Enum.at(estado.preguntas, ronda_index - 1)
+    |> then(fn mapa -> mapa.respuesta_correcta end)
+  end
+
+  @doc """
+  Actualiza los datos de un jugador con los puntos ganados o perdidos
+  Además se cambia el estado del jugador a respondio? = true
+  """
+  def actualizar_jugador(estado, usuario, puntos) do
+    jugador = estado.jugadores[usuario]
+    jugador_actualizado = %{jugador | puntaje: jugador.puntaje + puntos, respondio?: true}
+
+    nuevos_jugadores = Map.put(estado.jugadores, usuario, jugador_actualizado)
+    %{estado | jugadores: nuevos_jugadores}
+  end
+
+  @doc """
+  Difunde el resultado de una respuesta ya sea correcta o incorrecta
+  """
+  def difundir_resultado(resultado, usuario, ronda_index) do
+    GenServer.cast(
+      Trivia.Server,
+      {:difundir_a_partida, self(), {:respuesta, usuario, ronda_index, resultado}}
+    )
   end
 end
