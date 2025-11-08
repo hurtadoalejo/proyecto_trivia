@@ -28,6 +28,7 @@ defmodule Trivia.Server do
   Manejar mensajes asíncronos (casts) del cliente, los mensajes incluyen:
    - difundir_a_partida(pid_partida, contenido): Reenviar un mensaje a todos los clientes en una partida
    - difundir_a_partida(pid_partida, {:fin_partida, ganador, puntajes}): Reenviar fin de partida y limpiar sesiones
+   - difundir_a_partida(pid_partida, {:fin_partida_cancelada, miembro}): Reenviar fin de partida cancelada y limpiar sesiones
   """
   @impl true
   def handle_cast({:difundir_a_partida, pid_partida, {:fin_partida, ganador, puntajes}}, estado) do
@@ -64,6 +65,12 @@ defmodule Trivia.Server do
     {:noreply, estado}
   end
 
+  @doc """
+  Limpiar las sesiones de los jugadores que estaban en una partida terminada
+  1) Recorrer el estado buscando sesiones con partida == pid_partida
+  2) Establecer partida: nil en esas sesiones
+  3) Devolver el nuevo estado
+  """
   def limpiar_partida_jugadores(estado, pid_partida) do
       Enum.map(estado, fn {usuario, datos} ->
         if datos.partida == pid_partida do
