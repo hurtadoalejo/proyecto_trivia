@@ -38,4 +38,11 @@ defmodule Trivia.Supervisor do
   def list_games do
     DynamicSupervisor.which_children(__MODULE__)
   end
+
+  @doc """
+    Termina una partida de trivia dada su PID.
+  """
+  def terminar_partida(pid_partida) do
+    DynamicSupervisor.terminate_child(__MODULE__, pid_partida)
+  end
 end
