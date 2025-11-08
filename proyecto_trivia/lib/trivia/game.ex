@@ -76,8 +76,24 @@ defmodule Trivia.Game do
 
   @impl true
   def handle_cast({:forzar_salida, usuario}, estado) do
-    nuevo_estado = %{estado | players: Map.delete(estado.players, usuario)}
-    {:noreply, nuevo_estado}
+    cond do
+      estado.creador == usuario and not estado.started? ->
+        Enum.each(estado.players, fn {miembro, _} ->
+          if miembro != usuario do
+            GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:fin_partida_cancelada, miembro}})
+          end
+        end)
+        Trivia.Supervisor.terminar_partida(self())
+        Process.exit(self(), :normal)
+        {:noreply, estado}
+
+      Map.has_key?(estado.players, usuario) ->
+        nuevo_estado = %{estado | players: Map.delete(estado.players, usuario)}
+        {:noreply, nuevo_estado}
+
+      true ->
+        {:noreply, estado}
+    end
   end
 
   # Unirse a una partida
@@ -131,9 +147,6 @@ defmodule Trivia.Game do
 
       ronda != estado.round_index ->
         {:reply, {:error, :ronda_incorrecta}, estado}
-
-      not Map.has_key?(estado.players, usuario) ->
-        {:reply, {:error, :no_en_partida}, estado}
 
       MapSet.member?(estado.players[usuario].answered_rounds, ronda) ->
         {:reply, {:error, :ya_respondio}, estado}
@@ -268,6 +281,7 @@ defmodule Trivia.Game do
     end
 
     # Asegurarse de que el proceso termine
+    Trivia.Supervisor.terminar_partida(self())
     Process.exit(self(), :normal) # Esto termina el proceso de la partida de manera controlada.
 
     estado

@@ -36,16 +36,20 @@ defmodule Trivia.Server do
         GenServer.cast(pid_cliente, {:trivia_evento, {:fin_partida, ganador, puntajes}})
       end
     end)
+    nuevo_estado = limpiar_partida_jugadores(estado, pid_partida)
 
-    nuevo_estado =
-      Enum.map(estado, fn {usuario, datos} ->
-        if datos.partida == pid_partida do
-          {usuario, %{datos | partida: nil}}
-        else
-          {usuario, datos}
-        end
-      end)
-      |> Map.new()
+    {:noreply, nuevo_estado}
+  end
+
+  @impl true
+  def handle_cast({:difundir_a_partida, pid_partida, {:fin_partida_cancelada, miembro}}, estado) do
+    Enum.filter(estado, fn {_usuario, datos} -> datos.partida == pid_partida end)
+    |> Enum.map(fn {usuario, _datos} -> usuario end)
+    |> Enum.each(fn usuario ->
+      %{pid: pid_usuario} = Map.get(estado, usuario)
+      GenServer.cast(pid_usuario, {:trivia_evento, {:fin_partida_cancelada, miembro}})
+    end)
+    nuevo_estado = limpiar_partida_jugadores(estado, pid_partida)
 
     {:noreply, nuevo_estado}
   end
@@ -58,6 +62,17 @@ defmodule Trivia.Server do
       end
     end)
     {:noreply, estado}
+  end
+
+  def limpiar_partida_jugadores(estado, pid_partida) do
+      Enum.map(estado, fn {usuario, datos} ->
+        if datos.partida == pid_partida do
+          {usuario, %{datos | partida: nil}}
+        else
+          {usuario, datos}
+        end
+      end)
+      |> Map.new()
   end
 
   @doc """
@@ -136,6 +151,9 @@ defmodule Trivia.Server do
         cond do
           sesion.partida != nil and sesion.partida != pid_partida ->
             {:reply, {:error, :ya_en_otra_partida}, estado}
+
+          !Process.alive?(pid_partida) ->
+            {:reply, {:error, :partida_no_activa}, estado}
 
           true ->
             respuesta = GenServer.call(pid_partida, {:join, usuario})
