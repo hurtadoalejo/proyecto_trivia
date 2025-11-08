@@ -185,12 +185,11 @@ defmodule ClienteGenServer do
     {:noreply, state}
   end
 
-  def handle_cast({:trivia_evento, {:fin_partida, {usuario, puntaje}, puntajes}}, state) do
-    IO.puts("Partida terminada. Ganador: #{usuario} con #{puntaje} puntos.")
+  def handle_cast({:trivia_evento, {:fin_partida, ganador, puntajes}}, state) do
+    IO.puts("Partida terminada. Ganador: #{inspect(ganador)}")
     IO.puts("Puntajes:")
-    Enum.each(puntajes, fn {u, s} -> IO.puts("  #{u}: #{s} puntos.") end)
+    Enum.each(puntajes, fn {u, s} -> IO.puts("  #{u}: #{s}") end)
     IO.write("cliente> ")
-    set_ultima_partida(nil)
     {:noreply, %{state | estado: :esperando}}
   end
 
@@ -198,7 +197,6 @@ defmodule ClienteGenServer do
   def handle_cast({:trivia_evento, {:fin_partida_cancelada, miembro}}, state) do
     IO.puts("La partida fue cancelada por #{inspect(miembro)}.")
     IO.write("cliente> ")
-    set_ultima_partida(nil)
     {:noreply, %{state | estado: :esperando}}
   end
 end
