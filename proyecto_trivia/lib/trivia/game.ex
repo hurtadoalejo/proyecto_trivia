@@ -87,6 +87,11 @@ defmodule Trivia.Game do
         Process.exit(self(), :normal)
         {:noreply, estado}
 
+      estado.started? and Enum.count(estado.players) == 1 ->
+        Trivia.Supervisor.terminar_partida(self())
+        Process.exit(self(), :normal)
+        {:noreply, estado}
+
       Map.has_key?(estado.players, usuario) ->
         nuevo_estado = %{estado | players: Map.delete(estado.players, usuario)}
         {:noreply, nuevo_estado}
