@@ -44,11 +44,10 @@ defmodule Trivia.Server do
 
   @impl true
   def handle_cast({:difundir_a_partida, pid_partida, {:fin_partida_cancelada, miembro}}, estado) do
-    Enum.filter(estado, fn {_usuario, datos} -> datos.partida == pid_partida end)
-    |> Enum.map(fn {usuario, _datos} -> usuario end)
-    |> Enum.each(fn usuario ->
-      %{pid: pid_usuario} = Map.get(estado, usuario)
-      GenServer.cast(pid_usuario, {:trivia_evento, {:fin_partida_cancelada, miembro}})
+    Enum.each(estado, fn {_usuario, %{pid: pid_cliente, partida: partida_actual}} ->
+      if partida_actual == pid_partida do
+        GenServer.cast(pid_cliente, {:trivia_evento, {:fin_partida_cancelada, miembro}})
+      end
     end)
     nuevo_estado = limpiar_partida_jugadores(estado, pid_partida)
 

@@ -349,8 +349,12 @@ defmodule ClienteCLI do
         {:ok, _info} ->
           set_usuario(usuario)
           IO.puts("Conectado como #{usuario}")
+        {:error, :already_connected} ->
+          IO.puts("El usuario #{usuario} ya tiene una sesión activa.")
+        {:error, :invalid_clave} ->
+          IO.puts("La clave del usuario #{usuario} es incorrecta.")
         {:error, motivo} ->
-          IO.puts("No se pudo conectar: #{inspect(motivo)}")
+          IO.puts("No se pudo conectar: #{inspect(motivo)}.")
       end
     else
       IO.puts("Ya hay una sesión activa. Desconéctate primero.")
