@@ -69,7 +69,7 @@ defmodule Trivia.Game do
       estado.creador == usuario and not estado.comenzo? ->
         Enum.each(estado.jugadores, fn {miembro, _} ->
           if miembro != usuario do
-            GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:fin_partida_cancelada, miembro}})
+            GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:fin_partida_cancelada, usuario}})
           end
         end)
         Trivia.Supervisor.terminar_partida(self())
@@ -233,9 +233,10 @@ defmodule Trivia.Game do
     GenServer.cast(Trivia.Server, {:difundir_a_partida, self(), {:fin_partida, ganador, puntajes_finales}})
 
     fecha =
-      DateTime.utc_now()
-      |> DateTime.truncate(:second)
-      |> DateTime.to_string()
+      NaiveDateTime.utc_now()
+      |> NaiveDateTime.truncate(:second)
+      |> NaiveDateTime.to_string()
+      |> String.replace(" ", "|")
 
     Trivia.Server.guardar_resultado(fecha, estado.tema, puntajes_finales)
 
