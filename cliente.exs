@@ -490,8 +490,10 @@ end
         IO.puts("Debes conectarte primero: connect <usuario> <clave>")
 
       {pid_partida, usuario} when is_pid(pid_partida) ->
-        IO.puts("La partida ha comenzado.")
-        GenServer.call({@nombre_server, @nodo_server}, {:start_game, pid_partida, usuario})
+        case GenServer.call({@nombre_server, @nodo_server}, {:start_game, pid_partida, usuario}) do
+          {:error, _} -> IO.puts("Solo el creador puede iniciar la partida.")
+          {:ok, :iniciada} -> IO.puts("La partida ha sido iniciada.")
+        end
 
       {otra, _} ->
         IO.puts("Referencia de partida inválida en memoria: #{inspect(otra)}")
