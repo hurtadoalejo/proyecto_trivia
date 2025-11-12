@@ -123,7 +123,6 @@ defmodule Trivia.Server do
         {pid_partida, creador}
       end)
       |> Enum.filter(fn {pid, _creador} -> Process.alive?(pid) end)
-
     {:reply, partidas_vivas, estado}
   end
 
@@ -242,7 +241,7 @@ defmodule Trivia.Server do
     case Enum.find(estado, fn {_usuario, datos} -> datos.pid == pid_muerto end) do
       {usuario, %{partida: pid_partida}} ->
 
-        nuevo_estado = eliminar_sesion_de_usuario(estado, usuario)
+        nuevo_estado = Map.delete(estado, usuario)
 
         if pid_partida do
           GenServer.cast(pid_partida, {:forzar_salida, usuario})
@@ -282,10 +281,28 @@ defmodule Trivia.Server do
   """
   def eliminar_sesion(estado, usuario) do
     case Map.get(estado, usuario) do
-      %{monitor: monitor} ->
-        Process.demonitor(monitor, [:flush])
-        eliminar_sesion_de_usuario(estado, usuario)
+      %{pid: pid, monitor: monitor} ->
+        manejar_desconexion(estado, pid, monitor)
       _otro ->
+        estado
+    end
+  end
+
+  @doc """
+  Método que maneja la desconexión manual de un cliente
+  """
+  def manejar_desconexion(estado, pid_antiguo, monitor) do
+    case Enum.find(estado, fn {_usuario, datos} -> datos.pid == pid_antiguo end) do
+      {usuario, %{partida: pid_partida}} ->
+        Process.demonitor(monitor, [:flush])
+        nuevo_estado = Map.delete(estado, usuario)
+
+        if pid_partida do
+          GenServer.cast(pid_partida, {:forzar_salida, usuario})
+        end
+
+        nuevo_estado
+      nil ->
         estado
     end
   end
@@ -300,12 +317,6 @@ defmodule Trivia.Server do
       {:error, :not_connected}
     end
   end
-
-  @doc """
-  Eliminar la sesión de un usuario
-  """
-  def eliminar_sesion_de_usuario(estado, usuario),
-    do: Map.delete(estado, usuario)
 
   @doc """
   Autenticar o registrar un usuario
