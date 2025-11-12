@@ -7,7 +7,7 @@ defmodule ProyectoTriviaTest do
   defmodule Helpers do
     @csv_path "data/users.csv"
     @backup_path "data/users.csv.bak"
-    @header "usuario;clave;Biología;Historia;Matemáticas;Química\n"
+    @header "usuario;clave;Biología;Física;Historia;Matemáticas;Química\n"
 
     def ensure_dir! do
       File.mkdir_p!("data")
