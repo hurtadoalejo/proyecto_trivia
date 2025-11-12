@@ -293,7 +293,7 @@ defmodule UserManager do
     contenido_usuarios = Enum.map(usuarios, fn usuario ->
       convertir_struct_linea(usuario)
     end)
-    encabezado = ["usuario;clave;Biología;Historia;Matemáticas;Química\n"] ++ contenido_usuarios
+    encabezado = ["usuario;clave;Biología;Física;Historia;Matemáticas;Química\n"] ++ contenido_usuarios
     contenido = Enum.join(encabezado, "")
     File.write!(@usuarios, contenido)
   end
